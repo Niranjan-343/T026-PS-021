@@ -1,0 +1,7 @@
+borrower_id,borrower_name,gender,date_of_birth,monthly_net_income,credit_score,co_applicant_relation,co_applicant_monthly_income,employer
+BRW-01,Suresh Naik,M,1990-06-12,70000.00,790,SPOUSE,30000.00,Canara Bank
+BRW-02,Sowmya Yadav,F,1985-02-03,110000.00,760,SPOUSE,40000.00,Infosys
+BRW-03,Basavaraj Iyer,M,1982-09-21,95000.00,720,PARENT,30000.00,Canara Bank
+BRW-04,Imran Sheikh,M,1988-12-01,90000.00,775,SPOUSE,35000.00,ISRO
+BRW-05,Pradeep Verma,M,1979-03-15,60000.00,724,NONE,0.00,Canara Bank
+BRW-06,Keerthi Kamath,F,1992-07-07,80000.00,800,SIBLING,40000.00,ISRO

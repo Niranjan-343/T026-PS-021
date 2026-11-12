@@ -1,0 +1,24 @@
+property_id,stage_no,stage_name,cumulative_pct
+PRP-01,1,Booking,10
+PRP-01,2,Plinth,20
+PRP-01,3,Ground floor slab,30
+PRP-01,4,Third floor slab,50
+PRP-01,5,Seventh floor slab,75
+PRP-01,6,Possession,100
+PRP-02,1,Booking,95
+PRP-02,2,Possession,100
+PRP-03,1,Booking,10
+PRP-03,2,Plinth,30
+PRP-03,3,Ground floor slab,50
+PRP-03,4,Third floor slab,70
+PRP-03,5,Seventh floor slab,85
+PRP-03,6,Possession,100
+PRP-04,1,Booking,15
+PRP-04,2,Plinth,35
+PRP-04,3,Ground floor slab,55
+PRP-04,4,Third floor slab,75
+PRP-04,5,Possession,100
+PRP-05,1,Possession,100
+PRP-06,1,Booking,20
+PRP-06,2,Plinth,60
+PRP-06,3,Possession,100

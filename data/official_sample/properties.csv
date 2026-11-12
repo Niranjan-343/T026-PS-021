@@ -1,0 +1,7 @@
+property_id,borrower_id,builder,project,city,agreement_value,stamp_and_registration
+PRP-01,BRW-01,Prestige Group,Prestige Park Grove,Bengaluru,3000000.00,198000.00
+PRP-02,BRW-02,Sobha Ltd,Sobha Dream Acres,Bengaluru,7500000.00,495000.00
+PRP-03,BRW-03,Brigade Group,Brigade El Dorado,Bengaluru,4800000.00,316800.00
+PRP-04,BRW-04,Godrej Properties,Godrej Ananda,Bengaluru,5200000.00,343200.00
+PRP-05,BRW-05,Puravankara,Provident Ecopolitan,Bengaluru,1900000.00,125400.00
+PRP-06,BRW-06,Shriram Properties,Shriram Blue,Bengaluru,4200000.00,277200.00
