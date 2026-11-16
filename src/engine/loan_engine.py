@@ -83,6 +83,35 @@ class LoanEngine:
         self._pending_rate: Optional[Decimal] = None
         self._rate_effective_date: Optional[date] = None
 
+    @property
+    def converted(self) -> bool:
+        """Return True if loan has converted from pre-EMI to full EMI."""
+        return not self.moratorium_active
+
+    def _make_disburse_record(
+        self,
+        decision: str,
+        reason: str,
+        rules_applied: list[str],
+        amount: Decimal,
+        demand_date: date,
+        event_date: date,
+        stage_name: str,
+        cert_date: Optional[date] = None,
+    ) -> DisburseRecord:
+        return DisburseRecord(
+            tranche_no=self._tranche_counter,
+            release_date=event_date,
+            amount=amount,
+            demand_date=demand_date,
+            certification_date=cert_date or event_date,
+            stage_name=stage_name,
+            stage_pct=self.cumulative_certified_pct,
+            rules_applied=rules_applied,
+            decision=decision,
+            reason=reason,
+        )
+
     # ─────────────────────────────────────────────────────────────────────────
     # Internal logging helper
     # ─────────────────────────────────────────────────────────────────────────
@@ -125,11 +154,11 @@ class LoanEngine:
     # Event handlers
     # ─────────────────────────────────────────────────────────────────────────
 
-    def process_own_contribution(self, event_date: date, amount: Decimal):
+    def process_own_contribution(self, event_date: date, amount: Decimal) -> EventLog:
         """Mark own contribution as paid (BR-11)."""
         own_contribution = self.property_.agreement_value - self.loan.sanctioned_amount
         self.own_contribution_paid = True
-        self._log(
+        return self._log(
             event_date, "OWN_CONTRIBUTION", "SUCCESS",
             f"Own contribution Rs {amount:,.2f} received (required Rs {own_contribution:,.2f}). BR-11 satisfied.",
             ["BR-11"],
@@ -141,7 +170,7 @@ class LoanEngine:
         event_date: date,
         stage_name: str,
         certification_date: date,
-    ):
+    ) -> EventLog:
         """Record a stage certification."""
         # Find the stage percentage from property
         stage_pct = Decimal('0')
@@ -157,7 +186,7 @@ class LoanEngine:
             if s.stage_name in self.certified_stages
         )
 
-        self._log(
+        return self._log(
             event_date, "STAGE_CERTIFIED", "INFO",
             f"Stage '{stage_name}' certified on {certification_date}. "
             f"Cumulative certified: {self.cumulative_certified_pct:.2f}%.",
@@ -369,10 +398,9 @@ class LoanEngine:
                 break
 
         if target is None:
-            self._log(event_date, "RECORD_EMI", "REJECTED",
+            return self._log(event_date, "RECORD_EMI", "REJECTED",
                       f"EMI #{emi_no} not found in schedule.", ["BR-24"],
                       {"emi_no": emi_no, "amount": str(amount)})
-            return
 
         due_date = date.fromisoformat(target["due_date"])
         emi_amount = Decimal(target["emi_amount"])
@@ -398,7 +426,7 @@ class LoanEngine:
         # Sync to loan.emi_schedule
         self.loan.emi_schedule = self._emi_schedule
 
-        self._log(
+        return self._log(
             event_date, "RECORD_EMI", "SUCCESS",
             f"EMI #{emi_no} recorded. Status: {status}. Penal: Rs {penal:,.2f}.",
             ["BR-24"],
@@ -417,7 +445,7 @@ class LoanEngine:
         event_date: date,
         amount: Decimal,
         reduce_tenure: bool = True,
-    ):
+    ) -> EventLog:
         """
         BR-22: Part prepayment.
         - Minimum Rs 50,000.
@@ -425,23 +453,21 @@ class LoanEngine:
         - If during EMI: reduces outstanding, recalculates schedule.
         """
         if self.loan_closed:
-            self._log(event_date, "PREPAYMENT_PART", "REJECTED",
+            return self._log(event_date, "PREPAYMENT_PART", "REJECTED",
                       "Loan is already closed.", ["BR-23"], {"amount": str(amount)})
-            return
 
         if amount < BusinessRules.MIN_PREPAYMENT:
-            self._log(
+            return self._log(
                 event_date, "PREPAYMENT_PART", "REJECTED",
                 f"Prepayment Rs {amount:,.2f} is below minimum Rs {BusinessRules.MIN_PREPAYMENT:,.2f} (BR-22).",
                 ["BR-22"],
                 {"amount": str(amount), "minimum": str(BusinessRules.MIN_PREPAYMENT)},
             )
-            return
 
         if self.moratorium_active:
             # Pre-EMI: reduce total disbursed principal
             self.total_disbursed = max(Decimal('0'), self.total_disbursed - amount)
-            self._log(
+            return self._log(
                 event_date, "PREPAYMENT_PART", "SUCCESS",
                 f"Pre-EMI prepayment Rs {amount:,.2f}. New disbursed principal: Rs {self.total_disbursed:,.2f}.",
                 ["BR-22"],
@@ -451,28 +477,24 @@ class LoanEngine:
                     "phase": "pre_emi",
                 },
             )
-            return
 
         # During EMI phase
         # Find current outstanding from schedule
         outstanding = self._current_outstanding()
         if outstanding is None:
-            self._log(event_date, "PREPAYMENT_PART", "REJECTED",
+            return self._log(event_date, "PREPAYMENT_PART", "REJECTED",
                       "No EMI schedule active.", ["BR-22"], {"amount": str(amount)})
-            return
 
         new_outstanding = outstanding - amount
         if new_outstanding <= Decimal('0'):
             # Full closure
-            self.process_full_prepayment(event_date, amount)
-            return
+            return self.process_full_prepayment(event_date, amount)
 
         # Find next due date and remaining tenure
         next_due, rem_tenure = self._next_pending_emi_info(event_date)
         if next_due is None:
-            self._log(event_date, "PREPAYMENT_PART", "REJECTED",
+            return self._log(event_date, "PREPAYMENT_PART", "REJECTED",
                       "No pending EMIs in schedule.", ["BR-22"], {"amount": str(amount)})
-            return
 
         new_schedule = recalculate_schedule_after_prepayment(
             outstanding=new_outstanding,
@@ -488,7 +510,7 @@ class LoanEngine:
             self.current_emi = Decimal(new_schedule[0]["emi_amount"])
             self.remaining_tenure = len(new_schedule)
 
-        self._log(
+        return self._log(
             event_date, "PREPAYMENT_PART", "SUCCESS",
             f"Prepayment Rs {amount:,.2f}. New outstanding: Rs {new_outstanding:,.2f}. "
             f"Schedule recalculated ({len(new_schedule)} EMIs).",
@@ -502,16 +524,23 @@ class LoanEngine:
             },
         )
 
-    def process_full_prepayment(self, event_date: date, amount: Decimal):
+    def process_full_prepayment(self, event_date: date, amount: Decimal) -> EventLog:
         """BR-23: Full prepayment closes the loan."""
         if self.loan_closed:
-            self._log(event_date, "PREPAYMENT_FULL", "REJECTED",
+            return self._log(event_date, "PREPAYMENT_FULL", "REJECTED",
                       "Loan is already closed.", ["BR-23"], {"amount": str(amount)})
-            return
 
         outstanding = self.total_disbursed if self.moratorium_active else (
             self._current_outstanding() or Decimal('0')
         )
+        if amount < outstanding:
+            return self._log(
+                event_date, "PREPAYMENT_FULL", "REJECTED",
+                f"Full prepayment amount Rs {amount:,.2f} is less than outstanding Rs {outstanding:,.2f}.",
+                ["BR-23"],
+                {"amount": str(amount), "outstanding": str(outstanding)},
+            )
+
         self.loan_closed = True
         self.loan.status = "CLOSED"
         # Mark all pending EMIs as PAID
@@ -522,7 +551,7 @@ class LoanEngine:
                 entry["paid_amount"] = entry["emi_amount"]
         self.loan.emi_schedule = self._emi_schedule
 
-        self._log(
+        return self._log(
             event_date, "PREPAYMENT_FULL", "SUCCESS",
             f"Full prepayment Rs {amount:,.2f}. Loan CLOSED (BR-23).",
             ["BR-23"],
